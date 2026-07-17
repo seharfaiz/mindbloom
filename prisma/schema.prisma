@@ -1,0 +1,425 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Auth ----------
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  emailVerified  DateTime?
+  image          String?
+  passwordHash   String?
+  role           Role      @default(USER)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  profile        Profile?
+  settings       Settings?
+
+  moodEntries       MoodEntry[]
+  habits            Habit[]
+  habitLogs         HabitLog[]
+  journalEntries    JournalEntry[]
+  sleepLogs         SleepLog[]
+  assessmentResults AssessmentResult[]
+  cbtWorksheets     CbtWorksheet[]
+  actWorksheets     ActWorksheet[]
+  dbtWorksheets     DbtWorksheet[]
+  selfCarePlans     SelfCarePlanItem[]
+  aiConversations   AiConversation[]
+  notifications     Notification[]
+  achievements      UserAchievement[]
+  challengeLogs     ChallengeLog[]
+  bookmarks         ArticleBookmark[]
+  readingProgress   ReadingProgress[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PasswordResetToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+}
+
+// ---------- Profile & Settings ----------
+
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio         String?
+  birthYear   Int?
+  timezone    String   @default("UTC")
+  onboarded   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Settings {
+  id                  String  @id @default(cuid())
+  userId              String  @unique
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme               String  @default("system")
+  moodReminder        Boolean @default(true)
+  habitReminder       Boolean @default(true)
+  journalReminder     Boolean @default(true)
+  sleepReminder       Boolean @default(false)
+  assessmentReminder  Boolean @default(true)
+  reminderHour        Int     @default(20)
+  pushEnabled         Boolean @default(false)
+}
+
+// ---------- Mood Tracking ----------
+
+model MoodEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mood         Int // 1-5
+  emotions     String[] // tags e.g. ["anxious","hopeful"]
+  energy       Int // 1-5
+  stress       Int // 1-5
+  anxiety      Int // 1-5
+  sleepQuality Int? // 1-5
+  triggers     String[]
+  notes        String?  @db.Text
+  entryDate    DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([userId, entryDate])
+}
+
+// ---------- Habit Tracking ----------
+
+model Habit {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  icon        String     @default("sparkles")
+  color       String      @default("#8da47e")
+  frequency   Frequency  @default(DAILY)
+  targetDays  String[]    // e.g. ["MO","WE","FR"]
+  archived    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  logs        HabitLog[]
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  CUSTOM
+}
+
+model HabitLog {
+  id        String   @id @default(cuid())
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  completed Boolean  @default(true)
+
+  @@unique([habitId, date])
+}
+
+// ---------- Journal ----------
+
+model JournalEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  content   String   @db.Text
+  gratitude String[] // up to 3 gratitude items
+  prompt    String?
+  tags      String[]
+  entryDate DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, entryDate])
+}
+
+// ---------- Sleep ----------
+
+model SleepLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date       DateTime
+  bedTime    DateTime
+  wakeTime   DateTime
+  durationMin Int
+  quality    Int // 1-5
+  notes      String?
+
+  @@unique([userId, date])
+}
+
+// ---------- Assessments ----------
+
+model AssessmentResult {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrument     String   // e.g. "PHQ9", "GAD7", "PSS", "BIG_FIVE"
+  answers        Json
+  totalScore     Int?
+  subScores      Json?
+  interpretation String
+  severity       String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId, instrument, createdAt])
+}
+
+// ---------- CBT Toolbox ----------
+
+model CbtWorksheet {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      CbtType
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum CbtType {
+  THOUGHT_RECORD
+  BEHAVIORAL_ACTIVATION
+  PROBLEM_SOLVING
+  EXPOSURE_HIERARCHY
+  SELF_COMPASSION
+  CORE_BELIEFS
+  GOAL_SETTING
+}
+
+// ---------- ACT Toolbox ----------
+
+model ActWorksheet {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      ActType
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ActType {
+  VALUES_CLARIFICATION
+  COGNITIVE_DEFUSION
+  ACCEPTANCE_WILLINGNESS
+  COMMITTED_ACTION
+}
+
+// ---------- DBT Skills ----------
+
+model DbtWorksheet {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      DbtType
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum DbtType {
+  DISTRESS_TOLERANCE
+  EMOTION_REGULATION
+  INTERPERSONAL_EFFECTIVENESS
+  WISE_MIND
+}
+
+// ---------- Self-Care Planner ----------
+
+model SelfCarePlanItem {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  CareCategory
+  activity  String
+  scheduledFor DateTime
+  completed Boolean       @default(false)
+  createdAt DateTime      @default(now())
+}
+
+enum CareCategory {
+  PHYSICAL
+  EMOTIONAL
+  MENTAL
+  SOCIAL
+  OCCUPATIONAL
+  SPIRITUAL
+}
+
+// ---------- AI Wellness Coach ----------
+
+model AiConversation {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String     @default("New conversation")
+  messages  AiMessage[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model AiMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // "user" | "assistant"
+  content        String         @db.Text
+  createdAt      DateTime       @default(now())
+}
+
+// ---------- Psychology Library ----------
+
+model Article {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String
+  category     String
+  excerpt      String
+  content      String   @db.Text
+  coverImage   String?
+  readTimeMin  Int      @default(5)
+  published    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  bookmarks        ArticleBookmark[]
+  readingProgress  ReadingProgress[]
+}
+
+model ArticleBookmark {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+}
+
+model ReadingProgress {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId  String
+  article    Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  percent    Int     @default(0)
+  completed  Boolean @default(false)
+
+  @@unique([userId, articleId])
+}
+
+// ---------- Challenges & Achievements ----------
+
+model DailyChallenge {
+  id          String   @id @default(cuid())
+  date        DateTime @unique
+  title       String
+  description String
+  category    String
+
+  logs ChallengeLog[]
+}
+
+model ChallengeLog {
+  id          String         @id @default(cuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId String
+  challenge   DailyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  completed   Boolean        @default(true)
+  completedAt DateTime       @default(now())
+
+  @@unique([userId, challengeId])
+}
+
+model Achievement {
+  id          String @id @default(cuid())
+  key         String @unique
+  title       String
+  description String
+  icon        String @default("trophy")
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  earnedAt      DateTime    @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+// ---------- Notifications ----------
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}

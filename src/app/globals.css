@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-canvas-light text-navy-900 antialiased dark:bg-canvas-dark dark:text-white;
+  }
+  ::selection {
+    @apply bg-sage-200 text-navy-900;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-sage-400 ring-offset-2 ring-offset-canvas-light dark:ring-offset-canvas-dark;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/60 backdrop-blur-xl border border-white/40 dark:bg-white/[0.06] dark:border-white/10;
+  }
+  .bg-grain {
+    background-image: radial-gradient(circle at 1px 1px, rgba(27, 42, 58, 0.06) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
