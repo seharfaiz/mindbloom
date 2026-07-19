@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -19,12 +19,12 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json(
-      { error: "The AI coach isn't configured yet. Add OPENAI_API_KEY to your environment." },
-      { status: 503 }
-    );
-  }
+  if (!process.env.GEMINI_API_KEY) {
+  return NextResponse.json(
+    { error: "The AI coach isn't configured yet. Add GEMINI_API_KEY to your environment." },
+    { status: 503 }
+  );
+}
 
   const { conversationId, message } = await req.json();
   if (!message || typeof message !== "string") {
@@ -54,17 +54,29 @@ export async function POST(req: Request) {
     content: m.content,
   }));
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+const model = genAI.getGenerativeModel({
+  model: process.env.GEMINI_MODEL || "gemini-3.1-flash-lite",
+});
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...history],
-      temperature: 0.7,
-      max_tokens: 500,
-    });
+    const prompt = `
+${SYSTEM_PROMPT}
 
-    const reply = completion.choices[0]?.message?.content ?? "I'm here, but I couldn't form a reply just now.";
+Conversation:
+${history
+  .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+  .join("\n")}
+
+ASSISTANT:
+`;
+
+const result = await model.generateContent(prompt);
+const response = await result.response;
+
+const reply =
+  response.text() || "I'm here, but I couldn't form a reply just now.";
 
     await prisma.aiMessage.create({
       data: { conversationId: conversation.id, role: "assistant", content: reply },
